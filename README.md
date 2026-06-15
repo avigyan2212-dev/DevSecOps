@@ -75,22 +75,3 @@ http://127.0.0.1:5000
 | Frontend  | HTML, CSS, Vanilla JS        |
 
 ---
-
-## 🚀 How to Demo in Interview
-
-1. Run `python app.py`
-2. Open browser → `http://127.0.0.1:5000`
-3. Select a language (e.g. Hindi)
-4. Click mic → say "Hello, how are you?"
-5. App shows: "Hello, how are you?" → "नमस्ते, आप कैसे हैं?"
-6. Click **Speak Translation** to hear it
-
----
-
-## 💡 Interview Talking Points
-
-- Used Flask REST API with JSON request/response
-- Integrated two third-party APIs (SpeechRecognition + googletrans)
-- Handled audio encoding (WebM → WAV conversion in browser)
-- Built error handling for mic failures, unclear speech, network issues
-- Solves real problem: language barrier for travelers and non-native speakers
