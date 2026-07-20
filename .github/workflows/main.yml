@@ -31,3 +31,26 @@ jobs:
         with:
           # Applies the default, community-driven security rule set for scanning
           config: "p/default"
+            
+      # Step 4: Analyzes code quality, bugs, and code smells using SonarCloud
+      - name: SonarCloud Scan
+        uses: SonarSource/sonarcloud-github-action@master
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        with:
+          args: >
+            -Dsonar.organization=avigyan2212-dev
+            -Dsonar.projectKey=avigyan2212-dev_DevSecOps
+
+      # Step 5: Software Composition Analysis (SCA) for dependencies
+      - name: Trivy Vulnerability Scanner (SCA)
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'table'
+          exit-code: '1'
+          ignore-unfixed: true
+          vuln-type: 'library'
+          severity: 'CRITICAL,HIGH'
