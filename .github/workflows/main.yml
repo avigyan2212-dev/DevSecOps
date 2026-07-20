@@ -1,0 +1,33 @@
+# Name of the pipeline displayed in the GitHub Actions tab
+name: DevSecOps Pipeline
+
+# Triggers the pipeline to run automatically every time code is pushed
+on: [push]
+
+jobs:
+  # Defines the job block specifically for Phase 1 - Part A
+  phase1-partA:
+    # Specifies that this job will execute on a fresh Ubuntu virtual machine
+    runs-on: ubuntu-latest
+    
+    steps:
+      # Step 1: Downloads your repository code into the Ubuntu runner
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          # Fetches the entire git commit history (required for Gitleaks to scan past commits)
+          fetch-depth: 0
+
+      # Step 2: Scans the code history for accidentally exposed passwords, tokens, or keys
+      - name: Gitleaks Secret Scanner
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          # Provides the auto-generated, temporary GitHub token so Gitleaks can access the repo
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Step 3: Analyzes the source code logic for security vulnerabilities (SAST)
+      - name: Semgrep SAST Scanner
+        uses: returntocorp/semgrep-action@v1
+        with:
+          # Applies the default, community-driven security rule set for scanning
+          config: "p/default"
