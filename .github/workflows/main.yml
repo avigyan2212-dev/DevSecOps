@@ -31,3 +31,14 @@ jobs:
         with:
           # Applies the default, community-driven security rule set for scanning
           config: "p/default"
+
+      # Step 4: Analyzes code quality, bugs, and code smells using SonarCloud
+      - name: SonarCloud Scan
+        uses: SonarSource/sonarcloud-github-action@37db1dcce68e7ec9ce31780cbba71f3efd625d9b
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        with:
+          args: >
+            -Dsonar.organization=avigyan2212-dev
+            -Dsonar.projectKey=avigyan2212-dev_DevSecOps            
