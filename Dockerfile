@@ -13,7 +13,7 @@ COPY requirements.txt .
 
 #UPGRADE pip and wheel to patch CVE-2026-24049 before installing requirements 
 
-RUN pip install --no-cache-dir --upgrade pip "wheel>=0.46.2"
+RUN pip install --no-cache-dir --upgrade pip setuptools "wheel>=0.46.2"
 
 RUN pip install --no-cache-dir -r requirements.txt
 
