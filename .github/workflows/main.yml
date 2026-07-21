@@ -64,4 +64,14 @@ jobs:
         with:
           context: .
           push: false # We aren't pushing to a cloud registry yet, just testing the build!
-          tags: voicelingo:latest      
+          tags: voicelingo:latest     
+
+      # Step 7: Container Image Security Scan using Trivy
+      - name: Run Trivy vulnerability scanner on Docker Image
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'ghcr.io/${{ github.repository }}/voicelingo:latest'
+          format: 'table'
+          exit-code: '1' # Fails the pipeline if vulnerabilities are found in the container image
+          ignore-unfixed: true
+          severity: 'CRITICAL,HIGH'      
