@@ -9,6 +9,11 @@ jobs:
   phase1-partA:
     # Specifies that this job will execute on a fresh Ubuntu virtual machine
     runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
     
     steps:
       # Step 1: Downloads your repository code into the Ubuntu runner
