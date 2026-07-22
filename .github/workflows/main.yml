@@ -87,5 +87,3 @@ jobs:
         run: |
           docker push avigyan2212/devsecops-voicelingo:latest          
 
-
->>>>>>> phase-2
