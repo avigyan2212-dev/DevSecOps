@@ -1,0 +1,21 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: voicelingo-deployment
+  labels:
+    app: voicelingo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: voicelingo
+  template:
+    metadata:
+      labels:
+        app: voicelingo
+    spec:
+      containers:
+      - name: voicelingo-container
+        image: avigyan2212/voicelingo:latest 
+        ports:
+        - containerPort: 5000
