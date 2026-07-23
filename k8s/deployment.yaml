@@ -16,6 +16,6 @@ spec:
     spec:
       containers:
       - name: voicelingo-container
-        image: avigyan2212/voicelingo:latest 
+        image: avigyan2212/devsecops-voicelingo:latest 
         ports:
         - containerPort: 5000
