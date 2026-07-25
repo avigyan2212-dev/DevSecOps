@@ -107,7 +107,9 @@ jobs:
         run: cosign sign --yes avigyan2212/devsecops-voicelingo:latest
 
   # Step 11: Deploy to AWS EC2 k3s Cluster via Secure SSH Tunnel
-  deploy-to-kubernetes:
+     
+
+      deploy-to-kubernetes:
     name: Continuous Deployment (CD to K8s)
     needs: phase1-partA
     runs-on: ubuntu-latest
@@ -115,45 +117,17 @@ jobs:
       - name: Checkout Deployment Manifests
         uses: actions/checkout@v4
 
-      - name: Set up SSH Tunnel and Kubeconfig
+      - name: Establish Tunnel, Apply Manifests & Verify
         run: |
-          # 1. Save SSH Private Key
+          # 1. Save and secure SSH private key
           echo "${{ secrets.EC2_SSH_KEY }}" > private_key.pem
           chmod 600 private_key.pem
 
-          # 2. Start Background SSH Tunnel (Forwards local port 6443 to EC2 k3s)
+          # 2. Start background SSH tunnel and save its Process ID (PID)
           ssh -o StrictHostKeyChecking=no -i private_key.pem -N -L 6443:127.0.0.1:6443 ubuntu@${{ secrets.EC2_HOST }} &
-          
-          # Give the tunnel a couple of seconds to establish
-          sleep 3
+          TUNNEL_PID=$!
 
-          # 3. Configure local kubeconfig to talk to localhost:6443 via the tunnel
-          mkdir -p ~/.kube
-          echo "${{ secrets.KUBECONFIG_DATA }}" > ~/.kube/config
-          chmod 600 ~/.kube/config
-          
-          # Force kubeconfig to point to localhost since the tunnel maps it there
-          sed -i 's/server: https:\/\/.*:6443/server: https:\/\/127.0.0.1:6443/g' ~/.kube/config
-
-      - name: Inject Configuration Variables & Apply Manifests
-        run: |
-          sed -i 's/avigyan2212/${{ secrets.DOCKERHUB_USERNAME }}/g' kubernetes/*.yaml
-          sed -i 's|:latest|:${{ github.sha }}|g' kubernetes/*.yaml
-          kubectl apply -f kubernetes/ --insecure-skip-tls-verify --validate=false
-
-      - name: Verify Live Rolling Update Status
-        run: |
-          kubectl rollout status deployment/voicelingo-deployment --timeout=120s --insecure-skip-tls-verify
-
-      - name: Set up SSH Tunnel and Kubeconfig
-        run: |
-          echo "${{ secrets.EC2_SSH_KEY }}" > private_key.pem
-          chmod 600 private_key.pem
-          # Test SSH connection first to ensure authentication works
-          ssh -o StrictHostKeyChecking=no -i private_key.pem ubuntu@${{ secrets.EC2_HOST }} "echo 'SSH connection successful'"
-          # Start background SSH tunnel
-          ssh -o StrictHostKeyChecking=no -i private_key.pem -N -L 6443:127.0.0.1:6443 ubuntu@${{ secrets.EC2_HOST }} &
-          # Wait and verify that port 6443 is actually listening locally
+          # 3. Wait for the tunnel to open and verify listening port
           echo "Waiting for SSH tunnel to open..."
           for i in {1..10}; do
             if nc -z 127.0.0.1 6443; then
@@ -162,9 +136,22 @@ jobs:
             fi
             sleep 1
           done
-          # Configure kubeconfig
+
+          # 4. Configure local kubeconfig
           mkdir -p ~/.kube
           echo "${{ secrets.KUBECONFIG_DATA }}" > ~/.kube/config
           chmod 600 ~/.kube/config
-          # Point kubeconfig server to the local tunnel port
-          sed -i 's/server: https:\/\/.*:6443/server: https:\/\/127.0.0.1:6443/g' ~/.kube/config    
+          
+          # Force kubeconfig to point to local tunnel port
+          sed -i 's/server: https:\/\/.*:6443/server: https:\/\/127.0.0.1:6443/g' ~/.kube/config
+
+          # 5. Inject configuration variables & apply manifests
+          sed -i 's/avigyan2212/${{ secrets.DOCKERHUB_USERNAME }}/g' kubernetes/*.yaml
+          sed -i 's|:latest|:${{ github.sha }}|g' kubernetes/*.yaml
+          kubectl apply -f kubernetes/ --insecure-skip-tls-verify --validate=false
+
+          # 6. Verify live rolling update status
+          kubectl rollout status deployment/voicelingo-deployment --timeout=120s --insecure-skip-tls-verify
+
+          # 7. Clean up by terminating the background tunnel process
+          kill $TUNNEL_PID  
