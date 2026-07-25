@@ -12,25 +12,21 @@ jobs:
       packages: write
       id-token: write
     steps:
-      # Step 1: Downloads your repository code into the Ubuntu runner
       - name: Checkout Code
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      # Step 2: Scans the code history for accidentally exposed passwords, tokens, or keys
       - name: Gitleaks Secret Scanner
         uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # Step 3: Analyzes the source code logic for security vulnerabilities (SAST)
       - name: Semgrep SAST Scanner
         uses: returntocorp/semgrep-action@v1
         with:
           config: "p/default"
 
-      # Step 4: Analyzes code quality, bugs, and code smells using SonarCloud
       - name: SonarCloud Scan
         uses: SonarSource/sonarcloud-github-action@master
         env:
@@ -41,7 +37,6 @@ jobs:
             -Dsonar.organization=avigyan2212-dev
             -Dsonar.projectKey=avigyan2212-dev_DevSecOps
 
-      # Step 5: Software Composition Analysis (SCA) for dependencies
       - name: Trivy Vulnerability Scanner (SCA)
         uses: aquasecurity/trivy-action@master
         with:
@@ -53,7 +48,6 @@ jobs:
           vuln-type: 'library'
           severity: 'CRITICAL,HIGH'
 
-      # Step 6: Containerization (Docker Build & Push to Docker Hub)
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -70,7 +64,6 @@ jobs:
           load: true
           tags: 'avigyan2212/devsecops-voicelingo:latest'
 
-      # Step 7: Container Image Security Scan using Trivy
       - name: Run Trivy vulnerability scanner on Docker Image
         uses: aquasecurity/trivy-action@master
         with:
@@ -80,12 +73,10 @@ jobs:
           ignore-unfixed: true
           severity: 'CRITICAL,HIGH'
 
-      # Step 8: Push Secure Image to Docker Hub
       - name: Push Secure Image
         run: |
           docker push avigyan2212/devsecops-voicelingo:latest
 
-      # Step 9: Generate SBOM with Syft
       - name: Run Syft to generate SBOM
         uses: anchore/sbom-action@v0
         with:
@@ -99,17 +90,13 @@ jobs:
           name: sbom
           path: sbom.spdx.json
 
-      # Step 10: Sign the image with Cosign
       - name: Install Cosign
         uses: sigstore/cosign-installer@v3.5.0
 
       - name: Sign the published Docker image
         run: cosign sign --yes avigyan2212/devsecops-voicelingo:latest
 
-  # Step 11: Deploy to AWS EC2 k3s Cluster via Secure SSH Tunnel
-     
-
-      deploy-to-kubernetes:
+  deploy-to-kubernetes:
     name: Continuous Deployment (CD to K8s)
     needs: phase1-partA
     runs-on: ubuntu-latest
@@ -154,4 +141,4 @@ jobs:
           kubectl rollout status deployment/voicelingo-deployment --timeout=120s --insecure-skip-tls-verify
 
           # 7. Clean up by terminating the background tunnel process
-          kill $TUNNEL_PID  
+          kill $TUNNEL_PID
