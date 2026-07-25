@@ -96,7 +96,8 @@ jobs:
       - name: Sign the published Docker image
         run: cosign sign --yes avigyan2212/devsecops-voicelingo:latest
 
-  deploy-to-kubernetes:
+
+      deploy-to-kubernetes:
     name: Continuous Deployment (CD to K8s)
     needs: phase1-partA
     runs-on: ubuntu-latest
@@ -110,21 +111,35 @@ jobs:
           echo "${{ secrets.EC2_SSH_KEY }}" > private_key.pem
           chmod 600 private_key.pem
 
-          # 2. Start background SSH tunnel and save its Process ID (PID)
+          # 2. Test SSH connectivity explicitly first (foreground)
+          echo "Testing SSH connection to EC2..."
+          ssh -o StrictHostKeyChecking=no -i private_key.pem ubuntu@${{ secrets.EC2_HOST }} "echo 'SSH Authentication Successful!'"
+
+          # 3. Start background SSH tunnel and save its Process ID (PID)
+          echo "Starting background SSH tunnel..."
           ssh -o StrictHostKeyChecking=no -i private_key.pem -N -L 6443:127.0.0.1:6443 ubuntu@${{ secrets.EC2_HOST }} &
           TUNNEL_PID=$!
 
-          # 3. Wait for the tunnel to open and verify listening port
-          echo "Waiting for SSH tunnel to open..."
+          # 4. Wait for the tunnel to open and verify listening port with a strict check
+          echo "Waiting for SSH tunnel to open on port 6443..."
+          TUNNEL_READY=false
           for i in {1..10}; do
             if nc -z 127.0.0.1 6443; then
               echo "Tunnel is active!"
+              TUNNEL_READY=true
               break
             fi
             sleep 1
           done
 
-          # 4. Configure local kubeconfig
+          # If tunnel failed to open, abort pipeline immediately
+          if [ "$TUNNEL_READY" = false ]; then
+            echo "Error: Failed to establish SSH tunnel to port 6443."
+            kill $TUNNEL_PID 2>/dev/null || true
+            exit 1
+          fi
+
+          # 5. Configure local kubeconfig
           mkdir -p ~/.kube
           echo "${{ secrets.KUBECONFIG_DATA }}" > ~/.kube/config
           chmod 600 ~/.kube/config
@@ -132,13 +147,13 @@ jobs:
           # Force kubeconfig to point to local tunnel port
           sed -i 's/server: https:\/\/.*:6443/server: https:\/\/127.0.0.1:6443/g' ~/.kube/config
 
-          # 5. Inject configuration variables & apply manifests
+          # 6. Inject configuration variables & apply manifests
           sed -i 's/avigyan2212/${{ secrets.DOCKERHUB_USERNAME }}/g' kubernetes/*.yaml
           sed -i 's|:latest|:${{ github.sha }}|g' kubernetes/*.yaml
           kubectl apply -f kubernetes/ --insecure-skip-tls-verify --validate=false
 
-          # 6. Verify live rolling update status
+          # 7. Verify live rolling update status
           kubectl rollout status deployment/voicelingo-deployment --timeout=120s --insecure-skip-tls-verify
 
-          # 7. Clean up by terminating the background tunnel process
-          kill $TUNNEL_PID
+          # 8. Clean up by terminating the background tunnel process
+          kill $TUNNEL_PID  
