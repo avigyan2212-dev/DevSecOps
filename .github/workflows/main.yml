@@ -118,9 +118,9 @@ jobs:
           sed -i 's/avigyan2212/${{ secrets.DOCKERHUB_USERNAME }}/g' kubernetes/*.yaml
           sed -i 's|:latest|:${{ github.sha }}|g' kubernetes/*.yaml
 
-          # 4. Transfer the kubernetes manifests directory to the EC2 instance
+          # 4. Transfer the kubernetes manifests directory securely using a tar pipe over SSH
           echo "Transferring manifests to EC2..."
-          scp -o StrictHostKeyChecking=no -i private_key.pem -r kubernetes/ ubuntu@${{ secrets.EC2_HOST }}:~/kubernetes/
+          tar czf - kubernetes | ssh -o StrictHostKeyChecking=no -i private_key.pem ubuntu@${{ secrets.EC2_HOST }} "tar xzf -"
 
           # 5. SSH into EC2, apply manifests using k3s, and verify rollout status
           echo "Applying manifests and checking rollout on EC2..."
@@ -128,7 +128,7 @@ jobs:
             export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
             
             echo "Applying Kubernetes manifests..."
-            sudo kubectl apply -f ~/kubernetes/ --validate=false
+            sudo kubectl apply -f kubernetes/ --validate=false
             
             echo "Verifying rolling update status..."
             sudo kubectl rollout status deployment/voicelingo-deployment --timeout=120s
