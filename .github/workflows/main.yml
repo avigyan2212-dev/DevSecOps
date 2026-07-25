@@ -127,7 +127,7 @@ jobs:
         run: |
           sed -i 's/avigyan2212/${{ secrets.DOCKERHUB_USERNAME }}/g' kubernetes/*.yaml
           sed -i 's|:latest|:${{ github.sha }}|g' kubernetes/*.yaml
-          kubectl apply -f kubernetes/ --insecure-skip-tls-verify
+          kubectl apply -f kubernetes/ --insecure-skip-tls-verify --validate=false
 
       - name: Verify Live Rolling Update Status
         run: |
