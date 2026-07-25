@@ -144,3 +144,31 @@ jobs:
       - name: Verify Live Rolling Update Status
         run: |
           kubectl rollout status deployment/voicelingo-deployment --timeout=120s --insecure-skip-tls-verify
+          - name: Set up SSH Tunnel and Kubeconfig
+        run: |
+          echo "${{ secrets.EC2_SSH_KEY }}" > private_key.pem
+          chmod 600 private_key.pem
+
+          # Test SSH connection first to ensure authentication works
+          ssh -o StrictHostKeyChecking=no -i private_key.pem ubuntu@${{ secrets.EC2_HOST }} "echo 'SSH connection successful'"
+
+          # Start background SSH tunnel
+          ssh -o StrictHostKeyChecking=no -i private_key.pem -N -L 6443:127.0.0.1:6443 ubuntu@${{ secrets.EC2_HOST }} &
+
+          # Wait and verify that port 6443 is actually listening locally
+          echo "Waiting for SSH tunnel to open..."
+          for i in {1..10}; do
+            if nc -z 127.0.0.1 6443; then
+              echo "Tunnel is active!"
+              break
+            fi
+            sleep 1
+          done
+
+          # Configure kubeconfig
+          mkdir -p ~/.kube
+          echo "${{ secrets.KUBECONFIG_DATA }}" > ~/.kube/config
+          chmod 600 ~/.kube/config
+
+          # Point kubeconfig server to the local tunnel port
+          sed -i 's/server: https:\/\/.*:6443/server: https:\/\/127.0.0.1:6443/g' ~/.kube/config
