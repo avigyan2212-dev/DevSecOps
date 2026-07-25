@@ -110,26 +110,29 @@ jobs:
           echo "${{ secrets.EC2_SSH_KEY }}" > private_key.pem
           chmod 600 private_key.pem
 
-          # 2. Test SSH connectivity
+          # 2. Test SSH connectivity with keepalive options
           echo "Testing SSH connection to EC2..."
-          ssh -o StrictHostKeyChecking=no -i private_key.pem ubuntu@${{ secrets.EC2_HOST }} "echo 'SSH Connection Successful!'"
+          ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=30 -o ServerAliveCountMax=3 -i private_key.pem ubuntu@${{ secrets.EC2_HOST }} "echo 'SSH Connection Successful!'"
 
           # 3. Inject configuration variables into manifests locally on the runner
           sed -i 's/avigyan2212/${{ secrets.DOCKERHUB_USERNAME }}/g' kubernetes/*.yaml
           sed -i 's|:latest|:${{ github.sha }}|g' kubernetes/*.yaml
 
-          # 4. Transfer the kubernetes manifests directory securely using a tar pipe over SSH
+          # 4. Transfer the kubernetes manifests directory securely using a tar pipe over SSH with keepalive
           echo "Transferring manifests to EC2..."
-          tar czf - kubernetes | ssh -o StrictHostKeyChecking=no -i private_key.pem ubuntu@${{ secrets.EC2_HOST }} "tar xzf -"
+          tar czf - kubernetes | ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=30 -o ServerAliveCountMax=3 -i private_key.pem ubuntu@${{ secrets.EC2_HOST }} "tar xzf -"
 
-          # 5. SSH into EC2, apply manifests using k3s, and verify rollout status
+          # 5. SSH into EC2, setup user-level kubeconfig, apply manifests, and verify rollout status with keepalive
           echo "Applying manifests and checking rollout on EC2..."
-          ssh -o StrictHostKeyChecking=no -i private_key.pem ubuntu@${{ secrets.EC2_HOST }} << 'EOF'
-            export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+          ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=30 -o ServerAliveCountMax=3 -i private_key.pem ubuntu@${{ secrets.EC2_HOST }} << 'EOF'
+            set -e
+            mkdir -p ~/.kube
+            sudo cp /etc/rancher/k3s/k3s.yaml ~/.kube/config
+            sudo chown $(id -u):$(id -g) ~/.kube/config
             
             echo "Applying Kubernetes manifests..."
-            sudo kubectl apply -f kubernetes/ --validate=false
+            kubectl apply -f kubernetes/ --validate=false
             
             echo "Verifying rolling update status..."
-            sudo kubectl rollout status deployment/voicelingo-deployment --timeout=120s
+            kubectl rollout status deployment/voicelingo-deployment --timeout=120s
           EOF
