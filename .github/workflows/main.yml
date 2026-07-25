@@ -108,7 +108,7 @@ jobs:
         run: cosign sign --yes avigyan2212/devsecops-voicelingo:latest
 
   # Step 11: Deploy to AWS EC2 k3s Cluster (Configured as a separate root-level job)
-  deploy-to-kubernetes:
+      deploy-to-kubernetes:
     name: Continuous Deployment (CD to K8s)
     needs: phase1-partA
     runs-on: ubuntu-latest
@@ -116,12 +116,25 @@ jobs:
       - name: Checkout Deployment Manifests
         uses: actions/checkout@v4
 
-      - name: Set up Kubeconfig Authorization Gateway
+      - name: Set up SSH Tunnel and Kubeconfig
         run: |
+          # 1. Save SSH Private Key
+          echo "${{ secrets.EC2_SSH_KEY }}" > private_key.pem
+          chmod 600 private_key.pem
+
+          # 2. Start Background SSH Tunnel (Forwards local port 6443 to EC2 k3s)
+          ssh -o StrictHostKeyChecking=no -i private_key.pem -N -L 6443:127.0.0.1:6443 ubuntu@${{ secrets.EC2_HOST }} &
+          
+          # Give the tunnel a couple of seconds to establish
+          sleep 3
+
+          # 3. Configure local kubeconfig to talk to localhost:6443 via the tunnel
           mkdir -p ~/.kube
           echo "${{ secrets.KUBECONFIG_DATA }}" > ~/.kube/config
           chmod 600 ~/.kube/config
-          sed -i 's/127.0.0.1/${{ secrets.EC2_HOST }}/g' ~/.kube/config
+          
+          # Force kubeconfig to point to localhost since the tunnel maps it there
+          sed -i 's/server: https:\/\/.*:6443/server: https:\/\/127.0.0.1:6443/g' ~/.kube/config
 
       - name: Inject Configuration Variables & Apply Manifests
         run: |
