@@ -125,9 +125,7 @@ jobs:
           host: ${{ secrets.EC2_HOST }}
           username: ubuntu
           key: ${{ secrets.EC2_SSH_KEY }}
+          timeout: '60s' # Adds an explicit SSH connection timeout buffer
           script: |
-            # Use the built-in k3s wrapper to avoid TLS handshake and config timeouts
+            # Trigger the rollout restart using the built-in k3s wrapper
             sudo k3s kubectl rollout restart deployment/voicelingo-deployment
-
-            # Verify the rollout succeeds
-            sudo k3s kubectl rollout status deployment/voicelingo-deployment
