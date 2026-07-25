@@ -3,7 +3,7 @@ kind: Service
 metadata:
   name: voicelingo-service
 spec:
-  type: LoadBalancer
+  type: ClusterIP
   selector:
     app: voicelingo
   ports:

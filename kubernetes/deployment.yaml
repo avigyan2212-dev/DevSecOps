@@ -16,6 +16,10 @@ spec:
       - name: voicelingo
         image: avigyan2212/devsecops-voicelingo:latest
         imagePullPolicy: Always
-        command: ["flask","run","--host=0.0.0.0","--port=5000"]
+        command:
+        - "flask"
+        - "run"
+        - "--host=0.0.0.0"
+        - "--port=5000"
         ports:
         - containerPort: 5000
