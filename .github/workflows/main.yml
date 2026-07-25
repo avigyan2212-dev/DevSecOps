@@ -96,8 +96,7 @@ jobs:
       - name: Sign the published Docker image
         run: cosign sign --yes avigyan2212/devsecops-voicelingo:latest
 
-
-      deploy-to-kubernetes:
+  deploy-to-kubernetes:
     name: Continuous Deployment (CD to K8s)
     needs: phase1-partA
     runs-on: ubuntu-latest
@@ -158,4 +157,4 @@ jobs:
           kubectl rollout status deployment/voicelingo-deployment --timeout=120s --insecure-skip-tls-verify
 
           # 8. Clean up by terminating the background tunnel process
-          kill $TUNNEL_PID  
+          kill $TUNNEL_PID
