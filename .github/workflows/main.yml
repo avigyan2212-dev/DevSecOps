@@ -5,7 +5,47 @@ on:
     branches: [ "main" ]
 
 jobs:
+  infrastructure:
+    name: Provision Infrastructure (Terraform)
+    runs-on: ubuntu-latest
+    outputs:
+      ec2_host: ${{ steps.tf-outputs.outputs.instance_ip }}
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Terraform Init
+        run: terraform init
+        working-directory: ./terraform
+
+      - name: Terraform Destroy (Clean Slate)
+        run: terraform destroy -auto-approve
+        working-directory: ./terraform
+        continue-on-error: true
+
+      - name: Terraform Apply (Create New)
+        run: terraform apply -auto-approve
+        working-directory: ./terraform
+
+      - name: Extract Instance IP
+        id: tf-outputs
+        run: |
+          echo "instance_ip=$(terraform output -raw instance_public_ip)" >> $GITHUB_OUTPUT
+        working-directory: ./terraform
+
   phase1-partA:
+    name: Security Scans & Build
+    needs: infrastructure
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -98,41 +138,34 @@ jobs:
 
   deploy-to-kubernetes:
     name: Continuous Deployment (CD to K8s)
-    needs: phase1-partA
+    needs: [infrastructure, phase1-partA]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Deployment Manifests
         uses: actions/checkout@v4
 
-      - name: Deploy Manifests to EC2 via SSH
+      - name: Prepare Manifests
         run: |
-          # 1. Save and secure SSH private key
-          echo "${{ secrets.EC2_SSH_KEY }}" > private_key.pem
-          chmod 600 private_key.pem
-
-          # 2. Test SSH connectivity with keepalive options
-          echo "Testing SSH connection to EC2..."
-          ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=30 -o ServerAliveCountMax=3 -i private_key.pem ubuntu@${{ secrets.EC2_HOST }} "echo 'SSH Connection Successful!'"
-
-          # 3. Inject configuration variables into manifests locally on the runner
           sed -i 's/avigyan2212/${{ secrets.DOCKERHUB_USERNAME }}/g' kubernetes/*.yaml
           sed -i 's|:latest|:${{ github.sha }}|g' kubernetes/*.yaml
 
-          # 4. Transfer the kubernetes manifests directory securely using a tar pipe over SSH with keepalive
-          echo "Transferring manifests to EC2..."
-          tar czf - kubernetes | ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=30 -o ServerAliveCountMax=3 -i private_key.pem ubuntu@${{ secrets.EC2_HOST }} "tar xzf -"
-
-          # 5. SSH into EC2, setup user-level kubeconfig, apply manifests, and verify rollout status with keepalive
-          echo "Applying manifests and checking rollout on EC2..."
-          ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=30 -o ServerAliveCountMax=3 -i private_key.pem ubuntu@${{ secrets.EC2_HOST }} << 'EOF'
-            set -e
-            mkdir -p ~/.kube
-            sudo cp /etc/rancher/k3s/k3s.yaml ~/.kube/config
-            sudo chown $(id -u):$(id -g) ~/.kube/config
+      - name: Deploy Manifests to Fresh EC2 via Appleboy SSH Action
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ needs.infrastructure.outputs.ec2_host }}
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_KEY }}
+          port: 22
+          script_stop: true
+          timeout: 60s
+          command_timeout: 10m
+          source: "kubernetes/*.yaml"
+          target: "~/"
+          script: |
+            export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
             
             echo "Applying Kubernetes manifests..."
-            kubectl apply -f kubernetes/ --validate=false
+            sudo kubectl apply -f ~/kubernetes/ --validate=false
             
             echo "Verifying rolling update status..."
-            kubectl rollout status deployment/voicelingo-deployment --timeout=120s
-          EOF
+            sudo kubectl rollout status deployment/voicelingo-deployment --timeout=120s
