@@ -114,12 +114,12 @@ jobs:
           echo "Testing SSH connection to EC2..."
           ssh -o StrictHostKeyChecking=no -i private_key.pem ubuntu@${{ secrets.EC2_HOST }} "echo 'SSH Authentication Successful!'"
 
-          # 3. Start background SSH tunnel and save its Process ID (PID)
+          # 3. Start background SSH tunnel with verbose logging captured to a file
           echo "Starting background SSH tunnel..."
-          ssh -o StrictHostKeyChecking=no -i private_key.pem -N -L 6443:127.0.0.1:6443 ubuntu@${{ secrets.EC2_HOST }} &
+          ssh -v -o StrictHostKeyChecking=no -i private_key.pem -N -L 6443:127.0.0.1:6443 ubuntu@${{ secrets.EC2_HOST }} > ssh_tunnel.log 2>&1 &
           TUNNEL_PID=$!
 
-          # 4. Wait for the tunnel to open and verify listening port with a strict check
+          # 4. Wait for the tunnel to open and verify listening port
           echo "Waiting for SSH tunnel to open on port 6443..."
           TUNNEL_READY=false
           for i in {1..10}; do
@@ -131,9 +131,11 @@ jobs:
             sleep 1
           done
 
-          # If tunnel failed to open, abort pipeline immediately
+          # If tunnel failed, print the SSH debug logs so we can see the exact error
           if [ "$TUNNEL_READY" = false ]; then
             echo "Error: Failed to establish SSH tunnel to port 6443."
+            echo "--- SSH Tunnel Debug Logs ---"
+            cat ssh_tunnel.log
             kill $TUNNEL_PID 2>/dev/null || true
             exit 1
           fi
@@ -142,7 +144,7 @@ jobs:
           mkdir -p ~/.kube
           echo "${{ secrets.KUBECONFIG_DATA }}" > ~/.kube/config
           chmod 600 ~/.kube/config
-          
+
           # Force kubeconfig to point to local tunnel port
           sed -i 's/server: https:\/\/.*:6443/server: https:\/\/127.0.0.1:6443/g' ~/.kube/config
 
