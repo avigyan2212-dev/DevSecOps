@@ -1,3 +1,15 @@
+# Terraform (Infrastructure)
 .terraform/
 *.tfstate
 *.tfstate.*
+.terraform.lock.hcl
+terraform.tfvars
+
+# Security (CRITICAL: Do not push SSH keys)
+*.pem
+
+# Python / Flask (Application)
+venv/
+__pycache__/
+*.pyc
+.env
