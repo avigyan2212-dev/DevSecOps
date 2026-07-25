@@ -110,20 +110,20 @@ jobs:
           echo "${{ secrets.EC2_SSH_KEY }}" > private_key.pem
           chmod 600 private_key.pem
 
-          # 2. Test SSH connectivity explicitly first (foreground)
+          # 2. Test SSH connectivity explicitly first
           echo "Testing SSH connection to EC2..."
           ssh -o StrictHostKeyChecking=no -i private_key.pem ubuntu@${{ secrets.EC2_HOST }} "echo 'SSH Authentication Successful!'"
 
-          # 3. Start background SSH tunnel with -n (prevents stdin EOF exit) and verbose logging
-          echo "Starting background SSH tunnel..."
-          ssh -n -v -o StrictHostKeyChecking=no -i private_key.pem -N -L 6443:127.0.0.1:6443 ubuntu@${{ secrets.EC2_HOST }} > ssh_tunnel.log 2>&1 &
+          # 3. Start background SSH tunnel using safe local port 16443 (avoids runner conflicts)
+          echo "Starting background SSH tunnel on local port 16443..."
+          ssh -n -v -o StrictHostKeyChecking=no -i private_key.pem -N -L 16443:127.0.0.1:6443 ubuntu@${{ secrets.EC2_HOST }} > ssh_tunnel.log 2>&1 &
           TUNNEL_PID=$!
 
-          # 4. Wait for the tunnel to open and verify listening port with a strict check
-          echo "Waiting for SSH tunnel to open on port 6443..."
+          # 4. Wait for the tunnel to open and verify listening port 16443
+          echo "Waiting for SSH tunnel to open on port 16443..."
           TUNNEL_READY=false
           for i in {1..10}; do
-            if nc -z 127.0.0.1 6443; then
+            if nc -z 127.0.0.1 16443; then
               echo "Tunnel is active!"
               TUNNEL_READY=true
               break
@@ -131,9 +131,9 @@ jobs:
             sleep 1
           done
 
-          # If tunnel failed, print the SSH debug logs so we can see the exact error
+          # If tunnel failed, print debug logs and abort
           if [ "$TUNNEL_READY" = false ]; then
-            echo "Error: Failed to establish SSH tunnel to port 6443."
+            echo "Error: Failed to establish SSH tunnel to port 16443."
             echo "--- SSH Tunnel Debug Logs ---"
             cat ssh_tunnel.log
             kill $TUNNEL_PID 2>/dev/null || true
@@ -145,8 +145,8 @@ jobs:
           echo "${{ secrets.KUBECONFIG_DATA }}" > ~/.kube/config
           chmod 600 ~/.kube/config
           
-          # Force kubeconfig to point to local tunnel port
-          sed -i 's/server: https:\/\/.*:6443/server: https:\/\/127.0.0.1:6443/g' ~/.kube/config
+          # Force kubeconfig server to point to the safe local tunnel port 16443
+          sed -i 's/server: https:\/\/.*:6443/server: https:\/\/127.0.0.1:16443/g' ~/.kube/config
 
           # 6. Inject configuration variables & apply manifests
           sed -i 's/avigyan2212/${{ secrets.DOCKERHUB_USERNAME }}/g' kubernetes/*.yaml
