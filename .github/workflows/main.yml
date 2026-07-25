@@ -118,7 +118,6 @@ jobs:
 
       - name: Sign the published Docker image
         run: cosign sign --yes avigyan2212/devsecops-voicelingo:latest 
-
         # Step 11: Deploy to AWS EC2 k3s Cluster
       - name: Deploy to AWS k3s
         uses: appleboy/ssh-action@v1.0.3
@@ -127,8 +126,8 @@ jobs:
           username: ubuntu
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            # Force Kubernetes to restart the deployment using sudo and the official k3s config
-            sudo KUBECONFIG=/etc/rancher/k3s/k3s.yaml kubectl rollout restart deployment/voicelingo-deployment
+            # Use the built-in k3s wrapper to avoid TLS handshake and config timeouts
+            sudo k3s kubectl rollout restart deployment/voicelingo-deployment
 
             # Verify the rollout succeeds
-            sudo KUBECONFIG=/etc/rancher/k3s/k3s.yaml kubectl rollout status deployment/voicelingo-deployment
+            sudo k3s kubectl rollout status deployment/voicelingo-deployment
