@@ -119,7 +119,6 @@ jobs:
       - name: Sign the published Docker image
         run: cosign sign --yes avigyan2212/devsecops-voicelingo:latest
 
-      
       # Step 11: Deploy to AWS EC2 k3s Cluster
   deploy-to-kubernetes:
     name: Continuous Deployment (CD to K8s)
@@ -150,5 +149,4 @@ jobs:
 
       - name: Verify Live Rolling Update Status
         run: |
-          kubectl rollout status deployment/voicelingo-deployment --timeout=120s --insecure-skip-tls-verify# Step 11: Deploy to AWS EC2 k3s Cluster
-
+          kubectl rollout status deployment/voicelingo-deployment --timeout=120s --insecure-skip-tls-verify
