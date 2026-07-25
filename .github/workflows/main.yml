@@ -117,10 +117,13 @@ jobs:
         uses: sigstore/cosign-installer@v3.5.0
 
       - name: Sign the published Docker image
-        run: cosign sign --yes avigyan2212/devsecops-voicelingo:latest 
-        # Step 11: Deploy to AWS EC2 k3s Cluster
-      name: Continuous Deployment (CD to K8s)
-    needs: container-security # Adjust if your previous job name differs (e.g., sign/scan)
+        run: cosign sign --yes avigyan2212/devsecops-voicelingo:latest
+
+      
+      # Step 11: Deploy to AWS EC2 k3s Cluster
+  deploy-to-kubernetes:
+    name: Continuous Deployment (CD to K8s)
+    needs: container-security
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Deployment Manifests
@@ -132,7 +135,7 @@ jobs:
           # Decode or write your EC2 k3s config into the runner
           echo "${{ secrets.KUBECONFIG_DATA }}" > ~/.kube/config
           chmod 600 ~/.kube/config
-          
+
           # Optional: If your kubeconfig points to 127.0.0.1, replace it with your EC2 public IP
           sed -i 's/34.239.182.6/${{ secrets.EC2_HOST }}/g' ~/.kube/config
 
@@ -141,10 +144,11 @@ jobs:
           # Dynamic Username & Image Tag Replacement in your manifests
           sed -i 's/avigyan2212/${{ secrets.DOCKERHUB_USERNAME }}/g' kubernetes/*.yaml
           sed -i 's|:latest|:${{ github.sha }}|g' kubernetes/*.yaml
-          
+
           # Core Application Deployment to k3s
           kubectl apply -f kubernetes/ --insecure-skip-tls-verify
 
       - name: Verify Live Rolling Update Status
         run: |
-          kubectl rollout status deployment/voicelingo-deployment --timeout=120s --insecure-skip-tls-verify
+          kubectl rollout status deployment/voicelingo-deployment --timeout=120s --insecure-skip-tls-verify# Step 11: Deploy to AWS EC2 k3s Cluster
+
