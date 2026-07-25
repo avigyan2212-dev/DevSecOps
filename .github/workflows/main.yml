@@ -120,10 +120,9 @@ jobs:
         run: cosign sign --yes avigyan2212/devsecops-voicelingo:latest
 
       # Step 11: Deploy to AWS EC2 k3s Cluster
-      # Step 11: Deploy to AWS EC2 k3s Cluster
-  deploy-to-kubernetes:
+      deploy-to-kubernetes:
     name: Continuous Deployment (CD to K8s)
-    needs: container-security
+    needs: build   # <-- Make sure this matches your actual preceding job ID
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Deployment Manifests
