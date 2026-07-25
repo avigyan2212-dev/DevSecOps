@@ -5,7 +5,6 @@ on:
     branches: [ "main" ]
 
 jobs:
-  # Defines the job block specifically for Phase 1 - Part A
   phase1-partA:
     runs-on: ubuntu-latest
     permissions:
@@ -107,8 +106,8 @@ jobs:
       - name: Sign the published Docker image
         run: cosign sign --yes avigyan2212/devsecops-voicelingo:latest
 
-  # Step 11: Deploy to AWS EC2 k3s Cluster (Configured as a separate root-level job)
-      deploy-to-kubernetes:
+  # Step 11: Deploy to AWS EC2 k3s Cluster via Secure SSH Tunnel
+  deploy-to-kubernetes:
     name: Continuous Deployment (CD to K8s)
     needs: phase1-partA
     runs-on: ubuntu-latest
