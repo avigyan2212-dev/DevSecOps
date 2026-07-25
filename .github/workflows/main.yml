@@ -96,7 +96,8 @@ jobs:
       - name: Sign the published Docker image
         run: cosign sign --yes avigyan2212/devsecops-voicelingo:latest
 
-  deploy-to-kubernetes:
+
+      deploy-to-kubernetes:
     name: Continuous Deployment (CD to K8s)
     needs: phase1-partA
     runs-on: ubuntu-latest
@@ -104,57 +105,32 @@ jobs:
       - name: Checkout Deployment Manifests
         uses: actions/checkout@v4
 
-      - name: Establish Tunnel, Apply Manifests & Verify
+      - name: Deploy Manifests to EC2 via SSH
         run: |
           # 1. Save and secure SSH private key
           echo "${{ secrets.EC2_SSH_KEY }}" > private_key.pem
           chmod 600 private_key.pem
 
-          # 2. Test SSH connectivity explicitly first
+          # 2. Test SSH connectivity
           echo "Testing SSH connection to EC2..."
-          ssh -o StrictHostKeyChecking=no -i private_key.pem ubuntu@${{ secrets.EC2_HOST }} "echo 'SSH Authentication Successful!'"
+          ssh -o StrictHostKeyChecking=no -i private_key.pem ubuntu@${{ secrets.EC2_HOST }} "echo 'SSH Connection Successful!'"
 
-          # 3. Start background SSH tunnel using safe local port 16443 (avoids runner conflicts)
-          echo "Starting background SSH tunnel on local port 16443..."
-          ssh -n -v -o StrictHostKeyChecking=no -i private_key.pem -N -L 16443:127.0.0.1:6443 ubuntu@${{ secrets.EC2_HOST }} > ssh_tunnel.log 2>&1 &
-          TUNNEL_PID=$!
-
-          # 4. Wait for the tunnel to open and verify listening port 16443
-          echo "Waiting for SSH tunnel to open on port 16443..."
-          TUNNEL_READY=false
-          for i in {1..10}; do
-            if nc -z 127.0.0.1 16443; then
-              echo "Tunnel is active!"
-              TUNNEL_READY=true
-              break
-            fi
-            sleep 1
-          done
-
-          # If tunnel failed, print debug logs and abort
-          if [ "$TUNNEL_READY" = false ]; then
-            echo "Error: Failed to establish SSH tunnel to port 16443."
-            echo "--- SSH Tunnel Debug Logs ---"
-            cat ssh_tunnel.log
-            kill $TUNNEL_PID 2>/dev/null || true
-            exit 1
-          fi
-
-          # 5. Configure local kubeconfig
-          mkdir -p ~/.kube
-          echo "${{ secrets.KUBECONFIG_DATA }}" > ~/.kube/config
-          chmod 600 ~/.kube/config
-          
-          # Force kubeconfig server to point to the safe local tunnel port 16443
-          sed -i 's/server: https:\/\/.*:6443/server: https:\/\/127.0.0.1:16443/g' ~/.kube/config
-
-          # 6. Inject configuration variables & apply manifests
+          # 3. Inject configuration variables into manifests locally on the runner
           sed -i 's/avigyan2212/${{ secrets.DOCKERHUB_USERNAME }}/g' kubernetes/*.yaml
           sed -i 's|:latest|:${{ github.sha }}|g' kubernetes/*.yaml
-          kubectl apply -f kubernetes/ --insecure-skip-tls-verify --validate=false
 
-          # 7. Verify live rolling update status
-          kubectl rollout status deployment/voicelingo-deployment --timeout=120s --insecure-skip-tls-verify
+          # 4. Transfer the kubernetes manifests directory to the EC2 instance
+          echo "Transferring manifests to EC2..."
+          scp -o StrictHostKeyChecking=no -i private_key.pem -r kubernetes/ ubuntu@${{ secrets.EC2_HOST }}:~/kubernetes/
 
-          # 8. Clean up by terminating the background tunnel process
-          kill $TUNNEL_PID
+          # 5. SSH into EC2, apply manifests using k3s, and verify rollout status
+          echo "Applying manifests and checking rollout on EC2..."
+          ssh -o StrictHostKeyChecking=no -i private_key.pem ubuntu@${{ secrets.EC2_HOST }} << 'EOF'
+            export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+            
+            echo "Applying Kubernetes manifests..."
+            sudo kubectl apply -f ~/kubernetes/ --validate=false
+            
+            echo "Verifying rolling update status..."
+            sudo kubectl rollout status deployment/voicelingo-deployment --timeout=120s
+          EOF  
