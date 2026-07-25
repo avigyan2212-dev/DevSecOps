@@ -9,6 +9,11 @@ jobs:
   phase1-partA:
     # Specifies that this job will execute on a fresh Ubuntu virtual machine
     runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
     
     steps:
       # Step 1: Downloads your repository code into the Ubuntu runner
@@ -31,6 +36,7 @@ jobs:
         with:
           # Applies the default, community-driven security rule set for scanning
           config: "p/default"
+
 
       # Step 4: Analyzes code quality, bugs, and code smells using SonarCloud
       - name: SonarCloud Scan
@@ -78,12 +84,40 @@ jobs:
         with:
           image-ref: 'avigyan2212/devsecops-voicelingo:latest'
           format: 'table'
+
           exit-code: '1' 
+
+          exit-code: '1'
+
           ignore-unfixed: true
           severity: 'CRITICAL,HIGH'
 
   # Step 8: Push Secure Image to Docker Hub
       - name: Push Secure Image
         run: |
+
           docker push avigyan2212/devsecops-voicelingo:latest          
+
+    
+
+   # Step 9: Generate SBOM with Syft
+      - name: Run Syft to generate SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          image: 'avigyan2212/devsecops-voicelingo:latest'
+          format: 'spdx-json'
+          output-file: 'sbom.spdx.json'
+
+      - name: Upload SBOM as Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom
+          path: sbom.spdx.json
+
+      # Step 10: Sign the image with Cosign
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@v3.5.0
+
+      - name: Sign the published Docker image
+        run: cosign sign --yes avigyan2212/devsecops-voicelingo:latest       
 
