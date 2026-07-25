@@ -1,42 +1,35 @@
-# Name of the pipeline displayed in the GitHub Actions tab
 name: DevSecOps Pipeline
 
-# Triggers the pipeline to run automatically every time code is pushed
-on: [push]
+on:
+  push:
+    branches: [ "main" ]
 
 jobs:
   # Defines the job block specifically for Phase 1 - Part A
   phase1-partA:
-    # Specifies that this job will execute on a fresh Ubuntu virtual machine
     runs-on: ubuntu-latest
-
     permissions:
       contents: read
       packages: write
       id-token: write
-    
     steps:
       # Step 1: Downloads your repository code into the Ubuntu runner
       - name: Checkout Code
         uses: actions/checkout@v4
         with:
-          # Fetches the entire git commit history (required for Gitleaks to scan past commits)
           fetch-depth: 0
 
       # Step 2: Scans the code history for accidentally exposed passwords, tokens, or keys
       - name: Gitleaks Secret Scanner
         uses: gitleaks/gitleaks-action@v2
         env:
-          # Provides the auto-generated, temporary GitHub token so Gitleaks can access the repo
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       # Step 3: Analyzes the source code logic for security vulnerabilities (SAST)
       - name: Semgrep SAST Scanner
         uses: returntocorp/semgrep-action@v1
         with:
-          # Applies the default, community-driven security rule set for scanning
           config: "p/default"
-
 
       # Step 4: Analyzes code quality, bugs, and code smells using SonarCloud
       - name: SonarCloud Scan
@@ -49,7 +42,6 @@ jobs:
             -Dsonar.organization=avigyan2212-dev
             -Dsonar.projectKey=avigyan2212-dev_DevSecOps
 
-
       # Step 5: Software Composition Analysis (SCA) for dependencies
       - name: Trivy Vulnerability Scanner (SCA)
         uses: aquasecurity/trivy-action@master
@@ -61,7 +53,8 @@ jobs:
           ignore-unfixed: true
           vuln-type: 'library'
           severity: 'CRITICAL,HIGH'
-# Step 6: Containerization (Docker Build & Push to Docker Hub)
+
+      # Step 6: Containerization (Docker Build & Push to Docker Hub)
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -84,21 +77,16 @@ jobs:
         with:
           image-ref: 'avigyan2212/devsecops-voicelingo:latest'
           format: 'table'
-
-          exit-code: '1' 
-
+          exit-code: '1'
           ignore-unfixed: true
           severity: 'CRITICAL,HIGH'
 
-  # Step 8: Push Secure Image to Docker Hub
+      # Step 8: Push Secure Image to Docker Hub
       - name: Push Secure Image
         run: |
+          docker push avigyan2212/devsecops-voicelingo:latest
 
-          docker push avigyan2212/devsecops-voicelingo:latest          
-
-    
-
-   # Step 9: Generate SBOM with Syft
+      # Step 9: Generate SBOM with Syft
       - name: Run Syft to generate SBOM
         uses: anchore/sbom-action@v0
         with:
@@ -119,10 +107,10 @@ jobs:
       - name: Sign the published Docker image
         run: cosign sign --yes avigyan2212/devsecops-voicelingo:latest
 
-      # Step 11: Deploy to AWS EC2 k3s Cluster
-      deploy-to-kubernetes:
+  # Step 11: Deploy to AWS EC2 k3s Cluster (Configured as a separate root-level job)
+  deploy-to-kubernetes:
     name: Continuous Deployment (CD to K8s)
-    needs: build   # <-- Make sure this matches your actual preceding job ID
+    needs: phase1-partA
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Deployment Manifests
