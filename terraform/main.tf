@@ -16,6 +16,11 @@ data "aws_vpc" "default" {
   default = true
 }
 
+resource "aws_key_pair" "deployer" {
+  key_name   = "voicelingo-deployer-key"
+  public_key = var.ssh_public_key
+}
+
 resource "aws_security_group" "k3s_sg" {
   name        = "voicelingo-k3s-sg"
   description = "Allow inbound SSH and Kubernetes traffic"

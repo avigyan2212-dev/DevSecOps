@@ -5,7 +5,7 @@ on:
     branches: [ "main" ]
 
 jobs:
-  infrastructure:
+infrastructure:
     name: Provision Infrastructure (Terraform)
     runs-on: ubuntu-latest
     outputs:
@@ -36,13 +36,14 @@ jobs:
       - name: Terraform Apply (Create New)
         run: terraform apply -auto-approve
         working-directory: ./terraform
+        env:
+          TF_VAR_ssh_public_key: ${{ secrets.AWS_SSH_PUBLIC_KEY }}
 
       - name: Extract Instance IP
         id: tf-outputs
         run: |
           echo "instance_ip=$(terraform output -raw instance_public_ip)" >> $GITHUB_OUTPUT
         working-directory: ./terraform
-
   phase1-partA:
     name: Security Scans & Build
     needs: infrastructure
@@ -136,7 +137,7 @@ jobs:
       - name: Sign the published Docker image
         run: cosign sign --yes avigyan2212/devsecops-voicelingo:latest
 
-  deploy-to-kubernetes:
+      deploy-to-kubernetes:
     name: Continuous Deployment (CD to K8s)
     needs: [infrastructure, phase1-partA]
     runs-on: ubuntu-latest
@@ -149,7 +150,17 @@ jobs:
           sed -i 's/avigyan2212/${{ secrets.DOCKERHUB_USERNAME }}/g' kubernetes/*.yaml
           sed -i 's|:latest|:${{ github.sha }}|g' kubernetes/*.yaml
 
-      - name: Deploy Manifests to Fresh EC2 via Appleboy SSH Action
+      - name: Copy Manifests to Fresh EC2 via SCP
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ needs.infrastructure.outputs.ec2_host }}
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_KEY }}
+          port: 22
+          source: "kubernetes/*.yaml"
+          target: "~/"
+
+      - name: Deploy Manifests via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ needs.infrastructure.outputs.ec2_host }}
@@ -159,13 +170,11 @@ jobs:
           script_stop: true
           timeout: 60s
           command_timeout: 10m
-          source: "kubernetes/*.yaml"
-          target: "~/"
           script: |
             export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
-            
+
             echo "Applying Kubernetes manifests..."
             sudo kubectl apply -f ~/kubernetes/ --validate=false
-            
+
             echo "Verifying rolling update status..."
             sudo kubectl rollout status deployment/voicelingo-deployment --timeout=120s
