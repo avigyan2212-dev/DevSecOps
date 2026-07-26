@@ -133,7 +133,6 @@ jobs:
 
 
           owasp-zap-scan:
-    name: OWASP ZAP DAST & Email Report
     needs: deploy-to-production
     runs-on: ubuntu-latest
     permissions:
