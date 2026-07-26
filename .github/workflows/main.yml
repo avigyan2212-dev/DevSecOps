@@ -145,3 +145,74 @@ jobs:
             sudo kubectl apply -f ~/kubernetes/ --validate=false
             echo "Verifying rolling update status..."
             sudo kubectl rollout status deployment/voicelingo-deployment --timeout=120s
+       owasp-zap-scan:
+    name: OWASP ZAP DAST & Email Report
+    needs: build-and-deploy # Ensures ZAP runs AFTER deployment finishes successfully
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Run OWASP ZAP Baseline Scan
+        uses: zaproxy/action-baseline@v0.14.0
+        with:
+          target: 'http://54.210.64.40:32645'
+          fail_action: false # Keeps the pipeline moving while logging warnings
+
+      - name: Send Scan Report via Email
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          username: ${{ secrets.MAIL_USERNAME }}
+          password: ${{ secrets.MAIL_PASSWORD }}
+          subject: "Security Report: VoiceLingo Live DAST Scan Results"
+          to: ${{ secrets.MAIL_RECIPIENT }}
+          from: "GitHub Actions Security Bot <no-reply@github.com>"
+          body: |
+            Hello,
+            
+            The automated OWASP ZAP DAST security scan has completed against your live VoiceLingo production environment (http://54.210.64.40:32645).
+            
+            Please check the GitHub Actions workflow run logs for full vulnerability details, warnings, and remediation guidance.
+            
+            Repository: ${{ github.repository }}
+            Commit: ${{ github.sha }}
+          ignore_cert: true
+
+       owasp-zap-scan:
+    name: OWASP ZAP DAST & Email Report
+    needs: build-and-deploy # Ensures ZAP runs AFTER deployment finishes successfully
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Run OWASP ZAP Baseline Scan
+        uses: zaproxy/action-baseline@v0.14.0
+        with:
+          target: 'http://54.210.64.40:32645'
+          fail_action: false # Keeps the pipeline moving while logging warnings
+
+      - name: Send Scan Report via Email
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          username: ${{ secrets.MAIL_USERNAME }}
+          password: ${{ secrets.MAIL_PASSWORD }}
+          subject: "Security Report: VoiceLingo Live DAST Scan Results"
+          to: ${{ secrets.MAIL_RECIPIENT }}
+          from: "GitHub Actions Security Bot <no-reply@github.com>"
+          body: |
+            Hello,
+            
+            The automated OWASP ZAP DAST security scan has completed against your live VoiceLingo production environment (http://54.210.64.40:32645).
+            
+            Please check the GitHub Actions workflow run logs for full vulnerability details, warnings, and remediation guidance.
+            
+            Repository: ${{ github.repository }}
+            Commit: ${{ github.sha }}
+          ignore_cert: true   
