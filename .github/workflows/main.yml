@@ -16,17 +16,14 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
       - name: Gitleaks Secret Scanner
         uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
       - name: Semgrep SAST Scanner
         uses: returntocorp/semgrep-action@v1
         with:
           config: "p/default"
-
       - name: SonarCloud Scan
         uses: SonarSource/sonarcloud-github-action@master
         env:
@@ -36,7 +33,6 @@ jobs:
           args: >
             -Dsonar.organization=avigyan2212-dev
             -Dsonar.projectKey=avigyan2212-dev_DevSecOps
-
       - name: Trivy Vulnerability Scanner (Filesystem)
         uses: aquasecurity/trivy-action@master
         with:
@@ -59,16 +55,13 @@ jobs:
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
-
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-
       - name: Log in to Docker Hub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
-
       - name: Build and Push Docker Image
         uses: docker/build-push-action@v5
         with:
@@ -77,7 +70,6 @@ jobs:
           tags: |
             avigyan2212/devsecops-voicelingo:latest
             avigyan2212/devsecops-voicelingo:${{ github.sha }}
-
       - name: Trivy Scanner on Docker Image
         uses: aquasecurity/trivy-action@master
         with:
@@ -86,23 +78,19 @@ jobs:
           exit-code: '1'
           ignore-unfixed: true
           severity: 'CRITICAL,HIGH'
-
       - name: Run Syft to generate SBOM
         uses: anchore/sbom-action@v0
         with:
           image: 'avigyan2212/devsecops-voicelingo:latest'
           format: 'spdx-json'
           output-file: 'sbom.spdx.json'
-
       - name: Upload SBOM as Artifact
         uses: actions/upload-artifact@v4
         with:
           name: sbom
           path: sbom.spdx.json
-
       - name: Install Cosign
         uses: sigstore/cosign-installer@v3.5.0
-
       - name: Sign the published Docker image
         run: cosign sign --yes avigyan2212/devsecops-voicelingo:latest
 
@@ -113,12 +101,10 @@ jobs:
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
-
       - name: Prepare Manifests
         run: |
           sed -i 's/avigyan2212/${{ secrets.DOCKERHUB_USERNAME }}/g' kubernetes/*.yaml
           sed -i 's|:latest|:${{ github.sha }}|g' kubernetes/*.yaml
-
       - name: Copy Manifests to Production EC2 via SCP
         uses: appleboy/scp-action@v0.1.7
         with:
@@ -128,7 +114,6 @@ jobs:
           port: 22
           source: "kubernetes/*.yaml"
           target: "~/"
-
       - name: Execute Rolling Update via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -145,21 +130,19 @@ jobs:
             sudo kubectl apply -f ~/kubernetes/ --validate=false
             echo "Verifying rolling update status..."
             sudo kubectl rollout status deployment/voicelingo-deployment --timeout=120s
-       owasp-zap-scan:
+
+  owasp-zap-scan:
     name: OWASP ZAP DAST & Email Report
-    needs: build-and-deploy # Ensures ZAP runs AFTER deployment finishes successfully
+    needs: deploy-to-production
     runs-on: ubuntu-latest
-    
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
-
       - name: Run OWASP ZAP Baseline Scan
         uses: zaproxy/action-baseline@v0.14.0
         with:
           target: 'http://54.210.64.40:32645'
-          fail_action: false # Keeps the pipeline moving while logging warnings
-
+          fail_action: false
       - name: Send Scan Report via Email
         uses: dawidd6/action-send-mail@v3
         with:
@@ -172,47 +155,11 @@ jobs:
           from: "GitHub Actions Security Bot <no-reply@github.com>"
           body: |
             Hello,
-            
+
             The automated OWASP ZAP DAST security scan has completed against your live VoiceLingo production environment (http://54.210.64.40:32645).
-            
+
             Please check the GitHub Actions workflow run logs for full vulnerability details, warnings, and remediation guidance.
-            
+
             Repository: ${{ github.repository }}
             Commit: ${{ github.sha }}
           ignore_cert: true
-
-       owasp-zap-scan:
-    name: OWASP ZAP DAST & Email Report
-    needs: build-and-deploy # Ensures ZAP runs AFTER deployment finishes successfully
-    runs-on: ubuntu-latest
-    
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
-      - name: Run OWASP ZAP Baseline Scan
-        uses: zaproxy/action-baseline@v0.14.0
-        with:
-          target: 'http://54.210.64.40:32645'
-          fail_action: false # Keeps the pipeline moving while logging warnings
-
-      - name: Send Scan Report via Email
-        uses: dawidd6/action-send-mail@v3
-        with:
-          server_address: smtp.gmail.com
-          server_port: 465
-          username: ${{ secrets.MAIL_USERNAME }}
-          password: ${{ secrets.MAIL_PASSWORD }}
-          subject: "Security Report: VoiceLingo Live DAST Scan Results"
-          to: ${{ secrets.MAIL_RECIPIENT }}
-          from: "GitHub Actions Security Bot <no-reply@github.com>"
-          body: |
-            Hello,
-            
-            The automated OWASP ZAP DAST security scan has completed against your live VoiceLingo production environment (http://54.210.64.40:32645).
-            
-            Please check the GitHub Actions workflow run logs for full vulnerability details, warnings, and remediation guidance.
-            
-            Repository: ${{ github.repository }}
-            Commit: ${{ github.sha }}
-          ignore_cert: true   
