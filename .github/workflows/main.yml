@@ -131,8 +131,8 @@ jobs:
             echo "Verifying rolling update status..."
             sudo kubectl rollout status deployment/voicelingo-deployment --timeout=120s
 
-
-          owasp-zap-scan:
+  owasp-zap-scan:
+    name: OWASP ZAP DAST & Email Report
     needs: deploy-to-production
     runs-on: ubuntu-latest
     permissions:
@@ -165,4 +165,4 @@ jobs:
 
             Repository: ${{ github.repository }}
             Commit: ${{ github.sha }}
-          ignore_cert: true  
+          ignore_cert: true
