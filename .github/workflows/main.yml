@@ -1,57 +1,15 @@
-name: DevSecOps Pipeline
+name: Production DevSecOps Pipeline
 
 on:
   push:
     branches: [ "main" ]
 
 jobs:
-  infrastructure:
-    name: Provision Infrastructure (Terraform)
-    runs-on: ubuntu-latest
-    outputs:
-      ec2_host: ${{ steps.tf-outputs.outputs.instance_ip }}
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-east-1
-
-      - name: Terraform Init
-        run: terraform init
-        working-directory: ./terraform
-
-      - name: Terraform Destroy (Clean Slate)
-        run: terraform destroy -auto-approve
-        working-directory: ./terraform
-        continue-on-error: true
-
-      - name: Terraform Apply (Create New)
-        run: terraform apply -auto-approve
-        working-directory: ./terraform
-        env:
-          TF_VAR_ssh_public_key: ${{ secrets.AWS_SSH_PUBLIC_KEY }}
-
-      - name: Extract Instance IP
-        id: tf-outputs
-        run: |
-          echo "instance_ip=$(terraform output -raw instance_public_ip)" >> $GITHUB_OUTPUT
-        working-directory: ./terraform
-
-  phase1-partA:
-    name: Security Scans & Build
-    needs: infrastructure
+  security-scans:
+    name: Security Scans & Code Quality
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      packages: write
       id-token: write
     steps:
       - name: Checkout Code
@@ -79,7 +37,7 @@ jobs:
             -Dsonar.organization=avigyan2212-dev
             -Dsonar.projectKey=avigyan2212-dev_DevSecOps
 
-      - name: Trivy Vulnerability Scanner (SCA)
+      - name: Trivy Vulnerability Scanner (Filesystem)
         uses: aquasecurity/trivy-action@master
         with:
           scan-type: 'fs'
@@ -89,6 +47,18 @@ jobs:
           ignore-unfixed: true
           vuln-type: 'library'
           severity: 'CRITICAL,HIGH'
+
+  build-and-sign:
+    name: Build, Scan, SBOM & Sign Container
+    needs: security-scans
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -103,10 +73,12 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
-          load: true
-          tags: 'avigyan2212/devsecops-voicelingo:latest'
+          push: true
+          tags: |
+            avigyan2212/devsecops-voicelingo:latest
+            avigyan2212/devsecops-voicelingo:${{ github.sha }}
 
-      - name: Run Trivy vulnerability scanner on Docker Image
+      - name: Trivy Scanner on Docker Image
         uses: aquasecurity/trivy-action@master
         with:
           image-ref: 'avigyan2212/devsecops-voicelingo:latest'
@@ -114,10 +86,6 @@ jobs:
           exit-code: '1'
           ignore-unfixed: true
           severity: 'CRITICAL,HIGH'
-
-      - name: Push Secure Image
-        run: |
-          docker push avigyan2212/devsecops-voicelingo:latest
 
       - name: Run Syft to generate SBOM
         uses: anchore/sbom-action@v0
@@ -138,12 +106,12 @@ jobs:
       - name: Sign the published Docker image
         run: cosign sign --yes avigyan2212/devsecops-voicelingo:latest
 
-  deploy-to-kubernetes:
-    name: Continuous Deployment (CD to K8s)
-    needs: [infrastructure, phase1-partA]
+  deploy-to-production:
+    name: Continuous Deployment (Rolling Update)
+    needs: build-and-sign
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Deployment Manifests
+      - name: Checkout Code
         uses: actions/checkout@v4
 
       - name: Prepare Manifests
@@ -151,20 +119,20 @@ jobs:
           sed -i 's/avigyan2212/${{ secrets.DOCKERHUB_USERNAME }}/g' kubernetes/*.yaml
           sed -i 's|:latest|:${{ github.sha }}|g' kubernetes/*.yaml
 
-      - name: Copy Manifests to Fresh EC2 via SCP
+      - name: Copy Manifests to Production EC2 via SCP
         uses: appleboy/scp-action@v0.1.7
         with:
-          host: ${{ needs.infrastructure.outputs.ec2_host }}
+          host: ${{ secrets.EC2_HOST }}
           username: ubuntu
           key: ${{ secrets.EC2_SSH_KEY }}
           port: 22
           source: "kubernetes/*.yaml"
           target: "~/"
 
-      - name: Deploy Manifests via SSH
+      - name: Execute Rolling Update via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
-          host: ${{ needs.infrastructure.outputs.ec2_host }}
+          host: ${{ secrets.EC2_HOST }}
           username: ubuntu
           key: ${{ secrets.EC2_SSH_KEY }}
           port: 22
