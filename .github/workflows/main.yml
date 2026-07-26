@@ -5,7 +5,7 @@ on:
     branches: [ "main" ]
 
 jobs:
-infrastructure:
+  infrastructure:
     name: Provision Infrastructure (Terraform)
     runs-on: ubuntu-latest
     outputs:
@@ -44,6 +44,7 @@ infrastructure:
         run: |
           echo "instance_ip=$(terraform output -raw instance_public_ip)" >> $GITHUB_OUTPUT
         working-directory: ./terraform
+
   phase1-partA:
     name: Security Scans & Build
     needs: infrastructure
@@ -137,7 +138,7 @@ infrastructure:
       - name: Sign the published Docker image
         run: cosign sign --yes avigyan2212/devsecops-voicelingo:latest
 
-      deploy-to-kubernetes:
+  deploy-to-kubernetes:
     name: Continuous Deployment (CD to K8s)
     needs: [infrastructure, phase1-partA]
     runs-on: ubuntu-latest
@@ -172,9 +173,7 @@ infrastructure:
           command_timeout: 10m
           script: |
             export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
-
             echo "Applying Kubernetes manifests..."
             sudo kubectl apply -f ~/kubernetes/ --validate=false
-
             echo "Verifying rolling update status..."
             sudo kubectl rollout status deployment/voicelingo-deployment --timeout=120s
