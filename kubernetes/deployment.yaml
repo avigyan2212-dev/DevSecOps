@@ -2,6 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: voicelingo-deployment
+  namespace: default
 spec:
   replicas: 1
   selector:
@@ -11,10 +12,14 @@ spec:
     metadata:
       labels:
         app: voicelingo
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/path: "/metrics"
+        prometheus.io/port: "5000"
     spec:
       containers:
       - name: voicelingo
-        image: avigyan2212/devsecops-voicelingo:latest
+        image: avigyan2212/devsecops-voicelingo:90bfffa9eb3baf38b4a830e831af77d2824b8b89
         imagePullPolicy: Always
         command:
         - "flask"
