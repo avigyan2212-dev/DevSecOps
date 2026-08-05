@@ -13,19 +13,19 @@ jobs:
       id-token: write
     steps:
       - name: Checkout Code
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
       - name: Gitleaks Secret Scanner
-        uses: gitleaks/gitleaks-action@655d60f4b3d9595874836f3643b9d0a7018335ee # v2.3.0
+        uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Semgrep SAST Scanner
-        uses: returntocorp/semgrep-action@73f5541e2f75a643890f84ff57d4787a71f8bfd4 # v1.42.0
+        uses: returntocorp/semgrep-action@v1
         with:
           config: "p/default"
       - name: SonarCloud Scan
-        uses: SonarSource/sonarcloud-github-action@de2e6ea94025ecf7c3272d3e4b791444bcff9222 # v3.1.0
+        uses: SonarSource/sonarcloud-github-action@master
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
@@ -35,7 +35,7 @@ jobs:
             -Dsonar.projectKey=avigyan2212-dev_DevSecOps
             -Dsonar.qualitygate.wait=true
       - name: Trivy Vulnerability Scanner (Filesystem)
-        uses: aquasecurity/trivy-action@18f2510ff3c6bbf9c43b74261175c589b8852378 # master / 0.24.0
+        uses: aquasecurity/trivy-action@master
         with:
           scan-type: 'fs'
           scan-ref: '.'
@@ -55,16 +55,16 @@ jobs:
       id-token: write
     steps:
       - name: Checkout Code
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        uses: actions/checkout@v4
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@b5ca514318bd6ebc0fb2af1b734c216cfecfc64c # v3.10.0
+        uses: docker/setup-buildx-action@v3
       - name: Log in to Docker Hub
-        uses: docker/login-action@9780b0c442fdb111702f300f28820f120f2f3e8f # v3.1.0
+        uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
       - name: Build and Push Docker Image
-        uses: docker/build-push-action@ca87b5924bc178f5d50cd0499dedc33d98d24f08 # v5.1.0
+        uses: docker/build-push-action@v5
         with:
           context: .
           push: true
@@ -72,7 +72,7 @@ jobs:
             avigyan2212/devsecops-voicelingo:latest
             avigyan2212/devsecops-voicelingo:${{ github.sha }}
       - name: Trivy Scanner on Docker Image
-        uses: aquasecurity/trivy-action@18f2510ff3c6bbf9c43b74261175c589b8852378 # master
+        uses: aquasecurity/trivy-action@master
         with:
           image-ref: 'avigyan2212/devsecops-voicelingo:latest'
           format: 'table'
@@ -80,18 +80,18 @@ jobs:
           ignore-unfixed: true
           severity: 'CRITICAL,HIGH'
       - name: Run Syft to generate SBOM
-        uses: anchore/sbom-action@f325610c9f16a5b18aa213cfef88b136e1c66cf8 # v0.15.0
+        uses: anchore/sbom-action@v0
         with:
           image: 'avigyan2212/devsecops-voicelingo:latest'
           format: 'spdx-json'
           output-file: 'sbom.spdx.json'
       - name: Upload SBOM as Artifact
-        uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf888 # v4.4.0
+        uses: actions/upload-artifact@v4
         with:
           name: sbom
           path: sbom.spdx.json
       - name: Install Cosign
-        uses: sigstore/cosign-installer@d7d6bc445443cadc7bb84534f19b22e75f939b6b # v3.5.0
+        uses: sigstore/cosign-installer@v3.5.0
       - name: Sign the published Docker image
         run: cosign sign --yes avigyan2212/devsecops-voicelingo:latest
 
@@ -101,13 +101,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        uses: actions/checkout@v4
       - name: Prepare Manifests
         run: |
           sed -i 's/avigyan2212/${{ secrets.DOCKERHUB_USERNAME }}/g' kubernetes/*.yaml
           sed -i 's|:latest|:${{ github.sha }}|g' kubernetes/*.yaml
       - name: Copy Manifests to Production EC2 via SCP
-        uses: appleboy/scp-action@a87b6d13bd3866fe49d36e84a2d3b24fdb19b9bc # v0.1.7
+        uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ubuntu
@@ -116,7 +116,7 @@ jobs:
           source: "kubernetes/*.yaml"
           target: "~/"
       - name: Execute Rolling Update via SSH
-        uses: appleboy/ssh-action@71c775f0a7b4f2c99c2794eb8e2a2228d407ff28 # v1.0.3
+        uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ubuntu
@@ -141,14 +141,14 @@ jobs:
       contents: read
     steps:
       - name: Checkout Code
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        uses: actions/checkout@v4
       - name: Run OWASP ZAP Baseline Scan
-        uses: zaproxy/action-baseline@6ef3bc2edccbc20257008ff289c0b1154c46f1e0 # v0.14.0
+        uses: zaproxy/action-baseline@v0.14.0
         with:
           target: 'http://54.210.64.40:32645'
           fail_action: false
       - name: Send Scan Report via Email
-        uses: dawidd6/action-send-mail@c876b539c17fc7d23d9b4b1a43a3d538e7fb0317 # v3.11.0
+        uses: dawidd6/action-send-mail@v3
         with:
           server_address: smtp.gmail.com
           server_port: 465
