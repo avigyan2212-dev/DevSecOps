@@ -33,6 +33,7 @@ jobs:
           args: >
             -Dsonar.organization=avigyan2212-dev
             -Dsonar.projectKey=avigyan2212-dev_DevSecOps
+            -Dsonar.qualitygate.wait=true
       - name: Trivy Vulnerability Scanner (Filesystem)
         uses: aquasecurity/trivy-action@master
         with:
