@@ -1,169 +1,168 @@
 name: Production DevSecOps Pipeline
 
 on:
-  push:
-    branches: [ "main" ]
+  push:
+    branches: [ "main" ]
 
 jobs:
-  security-scans:
-    name: Security Scans & Code Quality
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      id-token: write
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Gitleaks Secret Scanner
-        uses: gitleaks/gitleaks-action@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: Semgrep SAST Scanner
-        uses: returntocorp/semgrep-action@v1
-        with:
-          config: "p/default"
-      - name: SonarCloud Scan
-        uses: SonarSource/sonarcloud-github-action@master
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        with:
-          args: >
-            -Dsonar.organization=avigyan2212-dev
-            -Dsonar.projectKey=avigyan2212-dev_DevSecOps
-            -Dsonar.qualitygate.wait=true
-      - name: Trivy Vulnerability Scanner (Filesystem)
-        uses: aquasecurity/trivy-action@master
-        with:
-          scan-type: 'fs'
-          scan-ref: '.'
-          format: 'table'
-          exit-code: '1'
-          ignore-unfixed: true
-          vuln-type: 'library'
-          severity: 'CRITICAL,HIGH'
+  security-scans:
+    name: Security Scans & Code Quality
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Gitleaks Secret Scanner
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Semgrep SAST Scanner
+        uses: returntocorp/semgrep-action@v1
+        with:
+          config: "p/default"
+      - name: SonarCloud Scan
+        uses: SonarSource/sonarcloud-github-action@master
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        with:
+          args: >
+            -Dsonar.organization=avigyan2212-dev
+            -Dsonar.projectKey=avigyan2212-dev_DevSecOps
+      - name: Trivy Vulnerability Scanner (Filesystem)
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'table'
+          exit-code: '1'
+          ignore-unfixed: true
+          vuln-type: 'library'
+          severity: 'CRITICAL,HIGH'
 
-  build-and-sign:
-    name: Build, Scan, SBOM & Sign Container
-    needs: security-scans
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-      id-token: write
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-      - name: Log in to Docker Hub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-      - name: Build and Push Docker Image
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          push: true
-          tags: |
-            avigyan2212/devsecops-voicelingo:latest
-            avigyan2212/devsecops-voicelingo:${{ github.sha }}
-      - name: Trivy Scanner on Docker Image
-        uses: aquasecurity/trivy-action@master
-        with:
-          image-ref: 'avigyan2212/devsecops-voicelingo:latest'
-          format: 'table'
-          exit-code: '1'
-          ignore-unfixed: true
-          severity: 'CRITICAL,HIGH'
-      - name: Run Syft to generate SBOM
-        uses: anchore/sbom-action@v0
-        with:
-          image: 'avigyan2212/devsecops-voicelingo:latest'
-          format: 'spdx-json'
-          output-file: 'sbom.spdx.json'
-      - name: Upload SBOM as Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: sbom
-          path: sbom.spdx.json
-      - name: Install Cosign
-        uses: sigstore/cosign-installer@v3.5.0
-      - name: Sign the published Docker image
-        run: cosign sign --yes avigyan2212/devsecops-voicelingo:latest
+  build-and-sign:
+    name: Build, Scan, SBOM & Sign Container
+    needs: security-scans
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Build and Push Docker Image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: |
+            avigyan2212/devsecops-voicelingo:latest
+            avigyan2212/devsecops-voicelingo:${{ github.sha }}
+      - name: Trivy Scanner on Docker Image
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'avigyan2212/devsecops-voicelingo:latest'
+          format: 'table'
+          exit-code: '1'
+          ignore-unfixed: true
+          severity: 'CRITICAL,HIGH'
+      - name: Run Syft to generate SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          image: 'avigyan2212/devsecops-voicelingo:latest'
+          format: 'spdx-json'
+          output-file: 'sbom.spdx.json'
+      - name: Upload SBOM as Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom
+          path: sbom.spdx.json
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@v3.5.0
+      - name: Sign the published Docker image
+        run: cosign sign --yes avigyan2212/devsecops-voicelingo:latest
 
-  deploy-to-production:
-    name: Continuous Deployment (Rolling Update)
-    needs: build-and-sign
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-      - name: Prepare Manifests
-        run: |
-          sed -i 's/avigyan2212/${{ secrets.DOCKERHUB_USERNAME }}/g' kubernetes/*.yaml
-          sed -i 's|:latest|:${{ github.sha }}|g' kubernetes/*.yaml
-      - name: Copy Manifests to Production EC2 via SCP
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ubuntu
-          key: ${{ secrets.EC2_SSH_KEY }}
-          port: 22
-          source: "kubernetes/*.yaml"
-          target: "~/"
-      - name: Execute Rolling Update via SSH
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ubuntu
-          key: ${{ secrets.EC2_SSH_KEY }}
-          port: 22
-          script_stop: true
-          timeout: 60s
-          command_timeout: 10m
-          script: |
-            export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
-            echo "Applying Kubernetes manifests..."
-            sudo kubectl apply -f ~/kubernetes/ --validate=false
-            echo "Verifying rolling update status..."
-            sudo kubectl rollout status deployment/voicelingo-deployment --timeout=120s
+  deploy-to-production:
+    name: Continuous Deployment (Rolling Update)
+    needs: build-and-sign
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+      - name: Prepare Manifests
+        run: |
+          sed -i 's/avigyan2212/${{ secrets.DOCKERHUB_USERNAME }}/g' kubernetes/*.yaml
+          sed -i 's|:latest|:${{ github.sha }}|g' kubernetes/*.yaml
+      - name: Copy Manifests to Production EC2 via SCP
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_KEY }}
+          port: 22
+          source: "kubernetes/*.yaml"
+          target: "~/"
+      - name: Execute Rolling Update via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_KEY }}
+          port: 22
+          script_stop: true
+          timeout: 60s
+          command_timeout: 10m
+          script: |
+            export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+            echo "Applying Kubernetes manifests..."
+            sudo kubectl apply -f ~/kubernetes/ --validate=false
+            echo "Verifying rolling update status..."
+            sudo kubectl rollout status deployment/voicelingo-deployment --timeout=120s
 
-  owasp-zap-scan:
-    name: OWASP ZAP DAST & Email Report
-    needs: deploy-to-production
-    runs-on: ubuntu-latest
-    permissions:
-      issues: write
-      contents: read
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-      - name: Run OWASP ZAP Baseline Scan
-        uses: zaproxy/action-baseline@v0.14.0
-        with:
-          target: 'http://54.210.64.40:32645'
-          fail_action: false
-      - name: Send Scan Report via Email
-        uses: dawidd6/action-send-mail@v3
-        with:
-          server_address: smtp.gmail.com
-          server_port: 465
-          username: ${{ secrets.MAIL_USERNAME }}
-          password: ${{ secrets.MAIL_PASSWORD }}
-          subject: "Security Report: VoiceLingo Live DAST Scan Results"
-          to: ${{ secrets.MAIL_RECIPIENT }}
-          from: "GitHub Actions Security Bot <no-reply@github.com>"
-          body: |
-            Hello,
+  owasp-zap-scan:
+    name: OWASP ZAP DAST & Email Report
+    needs: deploy-to-production
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      contents: read
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+      - name: Run OWASP ZAP Baseline Scan
+        uses: zaproxy/action-baseline@v0.14.0
+        with:
+          target: 'http://54.210.64.40:32645'
+          fail_action: false
+      - name: Send Scan Report via Email
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          username: ${{ secrets.MAIL_USERNAME }}
+          password: ${{ secrets.MAIL_PASSWORD }}
+          subject: "Security Report: VoiceLingo Live DAST Scan Results"
+          to: ${{ secrets.MAIL_RECIPIENT }}
+          from: "GitHub Actions Security Bot <no-reply@github.com>"
+          body: |
+            Hello,
 
-            The automated OWASP ZAP DAST security scan has completed against your live VoiceLingo production environment (http://54.210.64.40:32645).
+            The automated OWASP ZAP DAST security scan has completed against your live VoiceLingo production environment (http://54.210.64.40:32645).
 
-            Please check the GitHub Actions workflow run logs for full vulnerability details, warnings, and remediation guidance.
+            Please check the GitHub Actions workflow run logs for full vulnerability details, warnings, and remediation guidance.
 
-            Repository: ${{ github.repository }}
-            Commit: ${{ github.sha }}
-          ignore_cert: true
+            Repository: ${{ github.repository }}
+            Commit: ${{ github.sha }}
+          ignore_cert: true 
